@@ -1,0 +1,9 @@
+WARNINGS BEFORE CONSIDERING ANOVA RESULS - SUMMARY
+
+
+###############################
+#########     DFW     #########
+###############################
+
+######### In meanplots #########
+TareDrink Timepoint: 2 Warning in Shapiro-Wilk's test

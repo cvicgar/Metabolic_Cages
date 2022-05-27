@@ -1,30 +1,35 @@
+### Analysis of TSE Phenomaster data
+
+### Author: Cristina Vicente Garcia - cvicgar@gmail.com
+### Date: June 2022
+### Description: This script takes a file 
+
 #!/usr/bin/env Rscript
 
-
-
-# Loading required libraries
+## Installing and loading the required libraries
 
 if (!("ggplot2" %in% installed.packages())) { 
-  install.packages("ggplot2",dependencies=TRUE)
+  BiocManager::install("ggplot2",dependencies=TRUE)
 }
 if (!("reshape2" %in% installed.packages())) { 
-  install.packages("reshape2",dependencies=TRUE)
+  BiocManager::install("reshape2",dependencies=TRUE)
 }
 if (!("Rmisc" %in% installed.packages())) { 
-  install.packages("Rmisc",dependencies=TRUE)
+  BiocManager::install("Rmisc",dependencies=TRUE)
 }
 if (!("rlist" %in% installed.packages())) { 
-  install.packages("rlist",dependencies=TRUE)
+  BiocManager::install("rlist",dependencies=TRUE)
 }
 if (!("optparse" %in% installed.packages())) { 
-  install.packages("optparse",dependencies=TRUE)
+  BiocManager::install("optparse",dependencies=TRUE)
 }
 if (!("dplyr" %in% installed.packages())) { 
-  install.packages("dplyr",dependencies=TRUE)
+  BiocManager::install("dplyr",dependencies=TRUE)
 }
 if (!("ggsci" %in% installed.packages())) { 
-  install.packages("ggsci",dependencies=TRUE)
+  BiocManager::install("ggsci",dependencies=TRUE)
 }
+
 library(ggplot2)
 library(reshape2)
 library(Rmisc)
@@ -34,17 +39,37 @@ library(dplyr)
 library(ggsci)
 
 
-# Defining functions
+## Defining functions: plot_ind(), plot_bxplt(), plot_mean()
+
+# plot_ind() takes as inputs the whole dataset and the parameter to plot and returns two types of plots: 
+# 1) individual profiles of that parameter over time, highlighting the dark and light phases and grouped by genotype, 
+# resulting in as many panels as different genotypes, 2) individual profiles of that parameter over time, 
+# highlighting the dark and light phases, resulting in as many panels as animals in the experiment.
 plot_ind=function(parameter,data){
   plots=list()
   for (i in 1:length(parameter)){
-    p=ggplot(data=data,aes_string(x="TimePoint",y=parameter[i],colour=as.factor(data$Genotype),group="Animal"))+facet_wrap(~Genotype)+geom_rect(data=dark_phase,mapping=aes(xmin=rep(unlist(dark_phase$dark_start),length(genotype)),xmax=rep(unlist(dark_phase$dark_end),length(genotype)),ymin=-Inf,ymax=+Inf),inherit.aes = F,fill="azure2")+geom_point(size=0.1,show.legend=F)+geom_line(show.legend=F)+scale_color_locuszoom()+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
-    g=ggplot(data=data,aes_string(x="TimePoint",y=parameter[i],colour="Genotype",group="Animal"))+geom_rect(data=dark_phase,mapping=aes(xmin=rep(unlist(dark_phase$dark_start),nrow(gen)),xmax=rep(unlist(dark_phase$dark_end),nrow(gen)),ymin=-Inf,ymax=+Inf),inherit.aes = F,fill="azure2")+geom_point(size=0.1)+geom_line()+scale_color_locuszoom()+facet_wrap(~Animal,nrow=length(unique(data$Genotype)))+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
+    p=ggplot(data=data,aes_string(x="TimePoint",y=parameter[i],colour=as.factor(data$Genotype),group="Animal"))+
+      facet_wrap(~Genotype)+
+      geom_rect(data=dark_phase,mapping=aes(xmin=rep(unlist(dark_phase$dark_start),length(genotype)),xmax=rep(unlist(dark_phase$dark_end),length(genotype)),ymin=-Inf,ymax=+Inf),inherit.aes = F,fill="azure2")+
+      geom_point(size=0.1,show.legend=F)+
+      geom_line(show.legend=F)+
+      scale_color_locuszoom()+
+      theme_bw()+
+      theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
+    g=ggplot(data=data,aes_string(x="TimePoint",y=parameter[i],colour="Genotype",group="Animal"))+
+      geom_rect(data=dark_phase,mapping=aes(xmin=rep(unlist(dark_phase$dark_start),nrow(gen)),xmax=rep(unlist(dark_phase$dark_end),nrow(gen)),ymin=-Inf,ymax=+Inf),inherit.aes = F,fill="azure2")+
+      geom_point(size=0.1)+
+      geom_line()+
+      scale_color_locuszoom()+
+      facet_wrap(~Animal,nrow=length(unique(data$Genotype)))+
+      theme_bw()+
+      theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
     plots=list.append(plots,p,g)
   }
   return(plots)
 }
 
+# plot_bxplt() 
 plot_bxplt=function(parameter,data,pval_wg,folder,dark_phase){
   write.table("\n######### In boxplots #########","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n######### In boxplots #########","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
@@ -64,18 +89,32 @@ plot_bxplt=function(parameter,data,pval_wg,folder,dark_phase){
     colnames(dat.m)=c("Genotype","Animal","WgStart","Phase",parameter[i])
     
     #Boxplots separated by genotype and phase
-    r=ggplot(data=dat.m,aes_string("Phase",parameter[i]))+geom_boxplot(fill=rep(c("grey36","white"),length(genotype)))+facet_wrap(~Genotype)+stat_summary(fun.y=mean,geom="point",color="darkred")+stat_summary(fun.y=mean,geom="text",color="black",vjust=-1.5,aes(label=round(..y..,digits=2)))+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
+    r=ggplot(data=dat.m,aes_string("Phase",parameter[i]))+geom_boxplot(fill=rep(c("grey36","white"),length(genotype)))+
+      facet_wrap(~Genotype)+stat_summary(fun.y=mean,geom="point",color="darkred")+
+      stat_summary(fun.y=mean,geom="text",color="black",vjust=-1.5,aes(label=round(..y..,digits=2)))+
+      theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())
     #Individual boxplots
-    s=ggplot(data=data,aes_string("Phase",parameter[i],fill="Genotype"))+geom_boxplot()+stat_summary(fun.y=mean,geom="point",color="darkred")+stat_summary(fun.y=mean,geom="text",color="black",vjust=-1.5,aes(label=round(..y..,digits=2)))+facet_wrap(~Animal,nrow=length(unique(data$Genotype)))+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())+scale_fill_locuszoom()
-    plots=list.append(plots,r,s,t)
+    s=ggplot(data=data,aes_string("Phase",parameter[i],fill="Genotype"))+geom_boxplot()+
+      stat_summary(fun.y=mean,geom="point",color="darkred")+
+      stat_summary(fun.y=mean,geom="text",color="black",vjust=-1.5,aes(label=round(..y..,digits=2)))+
+      facet_wrap(~Animal,nrow=length(unique(data$Genotype)))+
+      theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"),panel.grid = element_blank())+
+      scale_fill_locuszoom()
+    plots=list.append(plots,r,s)
     
     dat.light=dat.m[dat.m$Phase=="LIGHT",]
     dat.dark=dat.m[dat.m$Phase=="DARK",]
     dat.ph=list(dat.light,dat.dark)
     
     if(parameter[i] %in% special){
-      v=ggplot(data=dat.m,aes_string("WgStart",parameter[i],colour="Genotype"))+geom_point()+facet_wrap(~Phase)+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+scale_color_locuszoom()
+      v=ggplot(data=dat.m,aes_string("WgStart",parameter[i],colour="Genotype"))+
+        geom_point()+
+        facet_wrap(~Phase)+
+        theme_bw()+
+        theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+
+        scale_color_locuszoom()
       plots=list.append(plots,v)
+      
       write.table("######################\n### ANCOVA RESULTS ###\n######################",file=paste0(folder,parameter[i],"_ANCOVA_statistics.txt"),quote=F,row.names=F,col.names=F)
       
       for (k in 1:length(dat.ph)){
@@ -134,6 +173,7 @@ plot_bxplt=function(parameter,data,pval_wg,folder,dark_phase){
       
     }
     
+    
     meansddat.m=summarySE(dat.m,measurevar = parameter[i],groupvars = c("Genotype","Phase"))
     colnames(meansddat.m)=c("Genotype", "Phase", "N",parameter[i],"sd" , "se","ci")
     meansddat.m=meansddat.m %>% mutate_if(is.numeric,round,digits=3)
@@ -178,6 +218,7 @@ plot_bxplt=function(parameter,data,pval_wg,folder,dark_phase){
   return(plots)
 }
 
+# plot_mean() 
 plot_mean=function(parameter,data,folder,dark_phase){
   write.table("\n######### In meanplots #########","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n######### In meanplots #########","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
@@ -189,7 +230,7 @@ plot_mean=function(parameter,data,folder,dark_phase){
     meansddf=summarySE(data,measurevar=parameter[i],groupvars=c("Genotype","TimePoint"))
     meansddf$Phase=tpvsp
     colnames(meansddf)=c("Genotype", "TimePoint", "N","Parameter" ,"sd" , "se","ci","Phase")
-    k=ggplot(meansddf,aes(x=TimePoint,y=Parameter,colour=Genotype,group=Genotype))+geom_rect(data=dark_phase,inherit.aes = F,aes(xmin=as.numeric(dark_phase$dark_start),xmax=as.numeric(dark_phase$dark_end),ymin=-Inf,ymax=Inf),fill="azure2")+geom_errorbar(aes(ymin=Parameter-se,ymax=Parameter+se), width=.1)+  geom_line() +
+    k=ggplot(meansddf,aes(x=TimePoint,y=Parameter,colour=Genotype,group=Genotype))+geom_rect(data=dark_phase,inherit.aes = F,aes(xmin=as.numeric(dark_start),xmax=as.numeric(dark_end),ymin=-Inf,ymax=Inf),fill="azure2")+geom_errorbar(aes(ymin=Parameter-se,ymax=Parameter+se), width=.1)+  geom_line() +
       geom_point()+ylab(parameter[i])+scale_x_continuous(breaks=seq(0,(max(meansddf$TimePoint)+3),4))+scale_color_locuszoom()+theme_bw()+theme(panel.grid = element_blank())
     
     plots=list.append(plots,k)
@@ -288,7 +329,17 @@ plot_mean=function(parameter,data,folder,dark_phase){
 
 #Reading the input file or exiting the program
 
-option_list=list(make_option(c("-f","--file"),type="character",default=NULL,help="Input data file",metavar="character"),make_option(c("-w","--weight"),type="character",default=NULL,help="Weight data file",metavar="character"),make_option(c("-s","--start"),type="integer",default=NULL,help="Start day for analysis",metavar="integer"),make_option(c("-e","--end"),type="integer",default=NULL,help="End day for analysis",metavar="integer"),make_option(c("-l","--wheel"),type="character",action="store_true",default=NULL,help="Analyse wheel data",metavar="character"),make_option(c("-d","--dfw"),type="character",action="store_true",default=NULL,help="Analyse drink/feed/weight data",metavar="character"),make_option(c("-a","--activity"),type="character",action="store_true",default=NULL,help="Analyse activity data",metavar="character"),make_option(c("-c","--calorimetry"),type="character",action="store_true",default=NULL,help="Analyse calorimetry data",metavar="character"),make_option(c("-r","--reference"),type="character",action="store_true",default=NULL,help="Analyse reference values",metavar="character"))
+option_list=list(make_option(c("-f","--file"),type="character",default=NULL,help="Input data file",metavar="character"),
+                 make_option(c("-w","--weight"),type="character",default=NULL,help="Weight data file",metavar="character"),
+                 make_option(c("-s","--start"),type="integer",default=NULL,help="Start day for analysis",metavar="integer"),
+                 make_option(c("-e","--end"),type="integer",default=NULL,help="End day for analysis",metavar="integer"),
+                 make_option(c("-l","--wheel"),type="character",action="store_true",default=NULL,help="Analyse wheel data",metavar="character"),
+                 make_option(c("-d","--dfw"),type="character",action="store_true",default=NULL,help="Analyse drink/feed/weight data",metavar="character"),
+                 make_option(c("-a","--activity"),type="character",action="store_true",default=NULL,help="Analyse activity data",metavar="character"),
+                 make_option(c("-c","--calorimetry"),type="character",action="store_true",default=NULL,help="Analyse calorimetry data",metavar="character"),
+                 make_option(c("-r","--reference"),type="character",action="store_true",default=NULL,help="Analyse reference values",metavar="character"),
+                 make_option(c("-t","--width"),type="integer",default=7,help="Width of plots in pdf format",metavar="integer"),
+                 make_option(c("-i","--height"),type="integer",default=7,help="Height of plots in pdf format",metavar="integer"))
 opt_parser=OptionParser(option_list=option_list)
 opt=parse_args(opt_parser)
 
@@ -429,17 +480,17 @@ capture.output(shapwg,file="./Results/ANOVA_weight.txt",append=T,quote=F,col.nam
 
 # Plotting reference values
 if(!is.null(opt$reference)){
-  cat("Generating reference plots...\n")
+  cat("\nGenerating reference plots...\n")
   reference=c("TempC","HumC","LightC","S.Flow","Ref.O2","Ref.CO2")
   
-  pdf("./Results/Reference_plots.pdf")
+  pdf("./Results/Reference_plots.pdf",width = opt$width,height = opt$height)
   for (i in 1:length(reference)){
     p=ggplot(data=data[data$Box=="1",],aes_string(x="TimePoint",y=reference[i],group="Animal"))+geom_rect(data=dark_phase,mapping=aes(xmin=as.numeric(dark_phase$dark_start),xmax=as.numeric(dark_phase$dark_end),ymin=-Inf,ymax=+Inf),inherit.aes = F,fill="azure2")+geom_point(size=0.1)+geom_line()+theme_classic()
     g=ggplot(data=data[data$Box=="1",],aes_string("Phase",reference[i]))+geom_boxplot(fill=c("grey36","white"))+stat_summary(fun.y=mean,geom="point",color="darkred")+stat_summary(fun.y=mean,geom="text",color="black",vjust=-0.7,aes(label=round(..y..,digits=2)))+theme_classic()
-    print(p)
-    print(g)
+    invisible(print(p))
+    invisible(print(g))
   }
-  dev.off()
+  graphics.off()
   
 }
 
@@ -447,35 +498,35 @@ if(!is.null(opt$reference)){
 if(!is.null(opt$calorimetry)){
   dir.create("./Results/Calorimetry")
   folder="./Results/Calorimetry/"
-  cat("Generating calorimetry plots...\n")
+  cat("\nGenerating calorimetry plots...\n")
   
   write.table("\n\n###############################\n######### CALORIMETRY #########\n###############################","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n\n###############################\n######### CALORIMETRY #########\n###############################","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
   calo=c("Flow","Temp","O2","CO2","dO2","dCO2","VO2.1.","VO2.2.","VO2.3.","VCO2.1.","VCO2.2.","VCO2.3.","RER","H.1.","H.2.","H.3.")
   
-  pdf("./Results/Calorimetry/Calorimetry_plots.pdf")
+  pdf("./Results/Calorimetry/Calorimetry_plots.pdf",width = opt$width,height = opt$height)
   
   indvplots=plot_ind(calo,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   calo=calo[2:length(calo)]
   
   bxplts=plot_bxplt(calo,data,pval_wg,folder,dark_phase)
   for(i in 1:length(bxplts)){
-    print(bxplts[i])
+    invisible(print(bxplts[[i]]))
   }
   
   meanplots=plot_mean(calo,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   }    
   
-  print(ggplot(data[data$SumR.L>0,],aes_string(x="SumR.L",y="RER",colour="Genotype",group="Animal"))+geom_point(size=1)+facet_wrap(~Phase)+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+scale_color_locuszoom())
-  print(ggplot(data[data$SumR.L>0,],aes_string(x="SumR.L",y="RER",colour="Phase",shape="Genotype"))+geom_point(size=1)+facet_wrap(~Animal)+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+scale_color_locuszoom())
+  invisible(print(ggplot(data[data$SumR.L>0,],aes_string(x="SumR.L",y="RER",colour="Genotype",group="Animal"))+geom_point(size=1)+facet_wrap(~Phase)+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+scale_color_locuszoom()))
+  invisible(print(ggplot(data[data$SumR.L>0,],aes_string(x="SumR.L",y="RER",colour="Phase",shape="Genotype"))+geom_point(size=1)+facet_wrap(~Animal)+theme_bw()+theme(strip.background = element_rect(fill="white"),strip.text = element_text(face="bold"))+scale_color_locuszoom()))
   
-  dev.off()
+  graphics.off()
   
 }
 
@@ -483,7 +534,7 @@ if(!is.null(opt$calorimetry)){
 if(!is.null(opt$activity)){
   dir.create("./Results/Activity")
   folder="./Results/Activity/"
-  cat("Generating activity plots...\n")
+  cat("\nGenerating activity plots...\n")
   
   write.table("\n\n###############################\n#########   ACTIVITY  #########\n###############################","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n\n###############################\n#########   ACTIVITY  #########\n###############################","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
@@ -496,49 +547,49 @@ if(!is.null(opt$activity)){
   }
   othersactivity=c("DistD","Speed")
   
-  pdf("./Results/Activity/Activity_plots.pdf")
+  pdf("./Results/Activity/Activity_plots.pdf",width = opt$width,height = opt$height)
   
   indvplots=plot_ind(activity,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   bxplts=plot_bxplt(activity,data,pval_wg,folder,dark_phase)
   for(i in 1:length(bxplts)){
-    print(bxplts[i])
+    invisible(print(bxplts[[i]]))
   }
   
   meanplots=plot_mean(activity,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   }    
   
   indvplots=plot_ind(cumactivity,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   meanplots=plot_mean(cumactivity,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   }  
   
   indvplots=plot_ind(othersactivity,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   bxplts=plot_bxplt(othersactivity,data,pval_wg,folder,dark_phase)
   for(i in 1:length(bxplts)){
-    print(bxplts[i])
+    invisible(print(bxplts[[i]]))
   }
   
   meanplots=plot_mean(othersactivity,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   } 
   
-  dev.off()
+  graphics.off()
   
 }
 
@@ -546,7 +597,7 @@ if(!is.null(opt$activity)){
 if(!is.null(opt$dfw)){
   dir.create("./Results/DFW")
   folder="./Results/DFW/"
-  cat("Generating DFW plots...\n")
+  cat("\nGenerating DFW plots...\n")
   
   write.table("\n\n###############################\n#########     DFW     #########\n###############################","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n\n###############################\n#########     DFW     #########\n###############################","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
@@ -557,19 +608,19 @@ if(!is.null(opt$dfw)){
     dfw=c("TareDrink","TareFeed","Weight")
   }
   
-  pdf("./Results/DFW/DFW_plots.pdf")
+  pdf("./Results/DFW/DFW_plots.pdf",width = opt$width,height = opt$height)
   
   indvplots=plot_ind(dfw,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   meanplots=plot_mean(dfw,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   } 
   
-  dev.off()
+  graphics.off()
   
 }
 
@@ -577,7 +628,7 @@ if(!is.null(opt$dfw)){
 if(!is.null(opt$wheel)){
   dir.create("./Results/Wheels")
   folder="./Results/Wheels/"
-  cat("Generating wheel plots...\n")
+  cat("\nGenerating wheel plots...\n")
   
   write.table("\n\n###############################\n#########   WHEELS   ##########\n###############################","./Results/Warnings.txt",append=T,quote=F,col.names=F,row.names=F)
   write.table("\n\n###############################\n#########   WHEELS   ##########\n###############################","./Results/Warnings_summary.txt",append=T,quote=F,col.names=F,row.names=F)
@@ -586,52 +637,52 @@ if(!is.null(opt$wheel)){
   cumwheel=c("CumRight","CumLeft","CumSumR.L","CumSumTime","CumSumRuns")
   otherswheel=c("MaxSpeed","AvgSpeed","MaxLen")
   
-  pdf("./Results/Wheels/wheel_plots.pdf")
+  pdf("./Results/Wheels/wheel_plots.pdf",width = opt$width,height = opt$height)
   
   indvplots=plot_ind(wheel,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   bxplts=plot_bxplt(wheel,data,pval_wg,folder,dark_phase)
   for(i in 1:length(bxplts)){
-    print(bxplts[i])
+    invisible(print(bxplts[[i]]))
   }
   
   meanplots=plot_mean(wheel,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   } 
   
   indvplots=plot_ind(cumwheel,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   meanplots=plot_mean(cumwheel,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   } 
   
   indvplots=plot_ind(otherswheel,data)
   for(i in 1:length(indvplots)){
-    print(indvplots[i])
+    invisible(print(indvplots[[i]]))
   }
   
   bxplts=plot_bxplt(otherswheel,data,pval_wg,folder,dark_phase)
   for(i in 1:length(bxplts)){
-    print(bxplts[i])
+    invisible(print(bxplts[[i]]))
   }
   
   meanplots=plot_mean(otherswheel,data,folder,dark_phase)
   for(i in 1:length(meanplots)){
-    print(meanplots[i])
+    invisible(print(meanplots[[i]]))
   } 
-  dev.off()
+  graphics.off()
   
 }
 
-cat("Done.\n")
+cat("\nDone.\n")
 
 
 

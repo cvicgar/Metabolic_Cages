@@ -1,0 +1,61 @@
+######################
+### ANCOVA RESULTS ###
+######################
+
+###################
+### Light phase ###
+###################
+
+
+### WITHOUT INTERACTIONS ###
+
+                          Df Sum Sq Mean Sq F value  Pr(>F)   
+dat.ph[[k]][["WgStart"]]   1 1555.4  1555.4  15.807 0.00409 **
+dat.ph[[k]][["Genotype"]]  2   39.8    19.9   0.202 0.82092   
+Residuals                  8  787.2    98.4                   
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+### WITH INTERACTIONS ###
+
+                                                   Df Sum Sq Mean Sq F value
+dat.ph[[k]][["WgStart"]]                            1 1555.4  1555.4  12.492
+dat.ph[[k]][["Genotype"]]                           2   39.8    19.9   0.160
+dat.ph[[k]][["WgStart"]]:dat.ph[[k]][["Genotype"]]  2   40.1    20.0   0.161
+Residuals                                           6  747.1   124.5        
+                                                   Pr(>F)  
+dat.ph[[k]][["WgStart"]]                           0.0123 *
+dat.ph[[k]][["Genotype"]]                          0.8558  
+dat.ph[[k]][["WgStart"]]:dat.ph[[k]][["Genotype"]] 0.8548  
+Residuals                                                  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+###################
+### Dark  phase ###
+###################
+
+
+### WITHOUT INTERACTIONS ###
+
+                          Df Sum Sq Mean Sq F value  Pr(>F)   
+dat.ph[[k]][["WgStart"]]   1 1261.6  1261.6  11.405 0.00968 **
+dat.ph[[k]][["Genotype"]]  2   69.1    34.5   0.312 0.74041   
+Residuals                  8  884.9   110.6                   
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+### WITH INTERACTIONS ###
+
+                                                   Df Sum Sq Mean Sq F value
+dat.ph[[k]][["WgStart"]]                            1 1261.6  1261.6  15.595
+dat.ph[[k]][["Genotype"]]                           2   69.1    34.5   0.427
+dat.ph[[k]][["WgStart"]]:dat.ph[[k]][["Genotype"]]  2  399.6   199.8   2.470
+Residuals                                           6  485.4    80.9        
+                                                    Pr(>F)   
+dat.ph[[k]][["WgStart"]]                           0.00755 **
+dat.ph[[k]][["Genotype"]]                          0.67096   
+dat.ph[[k]][["WgStart"]]:dat.ph[[k]][["Genotype"]] 0.16501   
+Residuals                                                    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1

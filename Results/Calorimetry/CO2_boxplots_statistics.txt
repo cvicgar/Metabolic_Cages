@@ -1,0 +1,48 @@
+Genotype	Phase	N	CO2	sd	se	ci
+112L1	DARK	4	0.437	0.084	0.042	0.134
+112L1	LIGHT	4	0.332	0.057	0.028	0.091
+112L2	DARK	4	0.516	0.048	0.024	0.076
+112L2	LIGHT	4	0.441	0.055	0.027	0.087
+WT	DARK	4	0.445	0.049	0.025	0.078
+WT	LIGHT	4	0.353	0.054	0.027	0.086
+
+###################
+### Light phase ###
+###################
+
+                          Df  Sum Sq  Mean Sq F value Pr(>F)  
+dat.ph[[k]][["Genotype"]]  2 0.02685 0.013424   4.379  0.047 *
+Residuals                  9 0.02759 0.003066                 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+[1] FALSE
+[1] FALSE
+[1] FALSE
+
+# Tukey multiple pairwise comparisons #
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["Genotype"]])
+
+$`dat.ph[[k]][["Genotype"]]`
+                   diff          lwr        upr     p adj
+112L2-112L1  0.10895982 -0.000349617 0.21826926 0.0507012
+WT-112L1     0.02037054 -0.088938903 0.12967997 0.8635209
+WT-112L2    -0.08858929 -0.197898724 0.02072015 0.1132903
+
+[1] FALSE
+[1] TRUE
+[1] FALSE
+
+###################
+### Dark  phase ###
+###################
+
+                          Df  Sum Sq Mean Sq F value Pr(>F)
+dat.ph[[k]][["Genotype"]]  2 0.01504 0.00752   1.918  0.202
+Residuals                  9 0.03528 0.00392               
+[1] FALSE
+[1] FALSE
+[1] FALSE

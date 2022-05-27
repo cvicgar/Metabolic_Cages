@@ -1,0 +1,29 @@
+Genotype	Phase	N	H.1.	sd	se	ci
+112L1	DARK	4	12.799	1.033	0.516	1.643
+112L1	LIGHT	4	 9.899	1.351	0.676	2.150
+112L2	DARK	4	11.915	1.081	0.540	1.720
+112L2	LIGHT	4	10.180	0.945	0.472	1.503
+WT	DARK	4	11.754	1.561	0.780	2.484
+WT	LIGHT	4	 9.600	1.699	0.849	2.703
+
+###################
+### Light phase ###
+###################
+
+                          Df Sum Sq Mean Sq F value Pr(>F)
+dat.ph[[k]][["Genotype"]]  2  0.673  0.3366    0.18  0.838
+Residuals                  9 16.808  1.8676               
+[1] FALSE
+[1] FALSE
+[1] FALSE
+
+###################
+### Dark  phase ###
+###################
+
+                          Df Sum Sq Mean Sq F value Pr(>F)
+dat.ph[[k]][["Genotype"]]  2  2.531   1.265   0.813  0.474
+Residuals                  9 14.012   1.557               
+[1] FALSE
+[1] FALSE
+[1] FALSE

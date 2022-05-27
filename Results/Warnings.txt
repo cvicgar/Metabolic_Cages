@@ -1,0 +1,20 @@
+WARNINGS BEFORE CONSIDERING ANOVA RESULS
+
+
+###############################
+#########     DFW     #########
+###############################
+
+######### In meanplots #########
+
+
+ TareDrink Timepoint: 2 Warning in Shapiro-Wilk's test
+
+	Shapiro-Wilk normality test
+
+data:  aov_residuals.data.tp
+W = 0.79226, p-value = 0.007661
+
+[1] FALSE
+[1] TRUE
+[1] FALSE

@@ -1,0 +1,48 @@
+Genotype	Phase	N	PerF	sd	se	ci
+112L1	DARK	4	760.445	182.041	 91.020	289.668
+112L1	LIGHT	4	418.527	140.858	 70.429	224.136
+112L2	DARK	4	988.900	 84.932	 42.466	135.146
+112L2	LIGHT	4	963.540	174.526	 87.263	277.709
+WT	DARK	4	886.859	197.977	 98.989	315.026
+WT	LIGHT	4	668.277	328.970	164.485	523.465
+
+###################
+### Light phase ###
+###################
+
+                          Df Sum Sq Mean Sq F value Pr(>F)  
+dat.ph[[k]][["Genotype"]]  2 595460  297730   5.635 0.0259 *
+Residuals                  9 475564   52840                 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+[1] FALSE
+[1] FALSE
+[1] FALSE
+
+# Tukey multiple pairwise comparisons #
+
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["Genotype"]])
+
+$`dat.ph[[k]][["Genotype"]]`
+                 diff        lwr      upr     p adj
+112L2-112L1  545.0134   91.19244 998.8343 0.0209062
+WT-112L1     249.7500 -204.07095 703.5709 0.3202523
+WT-112L2    -295.2634 -749.08434 158.5576 0.2186446
+
+[1] FALSE
+[1] TRUE
+[1] FALSE
+
+###################
+### Dark  phase ###
+###################
+
+                          Df Sum Sq Mean Sq F value Pr(>F)
+dat.ph[[k]][["Genotype"]]  2 104779   52389   1.976  0.194
+Residuals                  9 238642   26516               
+[1] FALSE
+[1] FALSE
+[1] FALSE
