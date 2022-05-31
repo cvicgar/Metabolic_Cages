@@ -107,7 +107,7 @@ plot_bxplt<-function(parameter,data,pval_wg,folder,dark_phase){
     
     dat.light<-dat.m[dat.m$Phase=="LIGHT",]
     dat.dark<-dat.m[dat.m$Phase=="DARK",]
-    dat.ph<-list(dat.light,dat.dark)
+    dat.ph<-list("light"=dat.light,"dark"=dat.dark)
     
     if(parameter[i] %in% special){
       v<-ggplot(data=dat.m,aes_string("WgStart",parameter[i],colour="Genotype"))+
@@ -120,13 +120,8 @@ plot_bxplt<-function(parameter,data,pval_wg,folder,dark_phase){
       
       write.table("######################\n### ANCOVA RESULTS ###\n######################",file=paste0(folder,parameter[i],"_ANCOVA_statistics.txt"),quote=F,row.names=F,col.names=F)
       
-      for (k in 1:length(dat.ph)){
-        if(k==1){
-          phase<-"Light"
-        } else {
-          phase<-"Dark "
-        }
-        
+     for (k in 1:length(dat.ph)){
+        phase <- names(dat.ph)[k]
         write.table(paste0("\n###################\n### ",phase," phase ###\n###################\n"),file=paste0(folder,parameter[i],"_ANCOVA_statistics.txt"),append=T,quote=F,row.names=F,col.names=F)
         
         ancova<-aov(dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["WgStart"]] + dat.ph[[k]][["Genotype"]])
@@ -183,11 +178,7 @@ plot_bxplt<-function(parameter,data,pval_wg,folder,dark_phase){
     write.table(as.matrix(meansddat.m),file=paste0(folder,parameter[i],"_boxplots_statistics.txt"),quote=F,col.names=TRUE,row.names=F,sep = "\t")
     
     for (k in 1:length(dat.ph)){
-      if(k=="1"){
-        phase<-"Light"
-      } else {
-        phase<-"Dark "
-      }
+      phase <- names(dat.ph)[k]
       
       write.table(paste0("\n###################\n### ",phase," phase ###\n###################\n"),file=paste0(folder,parameter[i],"_boxplots_statistics.txt"),append=T,quote=F,row.names=F,col.names=F)
       res.aov<-aov(dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["Genotype"]])
@@ -450,33 +441,6 @@ if(!is.null(opt$start) || !is.null(opt$end)){
 }
 
 # Extracting dark periods for plots
-#dark_start <- list()
-#dark_end <- list()
-#j <- 1
-#k <- 1
-
-#simp_data=data[data$Box==1,]
-#dark_start[[j]]<-(simp_data$TimePoint[1])
-#for(i in 2:nrow(simp_data)){
-#  if(simp_data$Phase[i]=="LIGHT"){
-#    next()
-#  } else if(i>1 && simp_data$Phase[i-1]=="DARK"){
-#    if(i<nrow(simp_data) && simp_data$Phase[i+1]=="LIGHT"){
-#      dark_end[[k]]<-simp_data$TimePoint[i]
-#      k<-k+1
-#    } else{
-#      next()
-#    }
-#  } else{
-#    j<-j+1
-#    dark_start[[j]]<-simp_data$TimePoint[i]
-#  }
-#}
-#dark_end[[k]]<-simp_data$TimePoint[i]
-#dark_phase<-as.data.frame(cbind(dark_start,dark_end))
-
-
-
 dark <- list()
 dark <- unique(split(data,data$Phase)$DARK[,"TimePoint"])
 
