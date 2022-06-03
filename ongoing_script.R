@@ -35,6 +35,12 @@ if (!("dplyr" %in% installed.packages())) {
 if (!("ggsci" %in% installed.packages())) { 
   BiocManager::install("ggsci", dependencies=TRUE)
 }
+if (!("car" %in% installed.packages())) { 
+  BiocManager::install("car", dependencies=TRUE)
+}
+if (!("multcomp" %in% installed.packages())) { 
+  BiocManager::install("multcomp", dependencies=TRUE)
+}
 
 library("ggplot2")
 library("ggpubr")
@@ -44,7 +50,8 @@ library("rlist")
 library("optparse")
 library("dplyr")
 library("ggsci")
-
+library("car")
+library("multcomp")
 
 ## DEFINING FUNCTIONS
 
@@ -93,17 +100,17 @@ plot_ind <- function(parameter, data, dark_phase, plot_labels){
 # depicting results grouped by phase, 2) boxplots depicting results grouped by phase and genotype, 3) statistical analyses of
 # all results, including warnings in case assumptions for the corresponding analyses are not met.
 plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
-  # Creation of files for writing warnings resulting from the statistical results and definition of some variables
+  # Appending "In boxplots" in the warning files, which contain information regarding the one-way ANOVA statistical tests
+  # that do not meet the underlying assumptions of homogeneity of variances and normality (see below)
   write.table("\n######### In boxplots #########", "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n######### In boxplots #########", "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, 
               row.names=F)
-  
+  # Definition of some variables
   special <- c ("VO2.3.", "VCO2.3.", "H.3.")
   plots <- list()
   genotype_no <- length(unique(data$Genotype))
   
-  # For each of the parameters to plot: 1) calculation of mean data during the ligth and dark cycles for plots, 2) plotting
-  # of boxplots
+  # For each of the parameters to plot: 1) calculation of mean data during the light and dark cycles, 2) plotting
   for (i in 1:length(parameter)){
     
     # Calculation of mean data during the light and dark cycles for plots
@@ -147,8 +154,9 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
     
     dat.ph <- list("Light"=dat.m[dat.m$Phase=="LIGHT",], "Dark"=dat.m[dat.m$Phase=="DARK",])
     
-    # Special parameters VO2.3., VCO2.3., H.3. are first plotted and then subjected to ANCOVA statistical analyses 
-    # to consider the effect of weight
+    # Special parameters VO2.3., VCO2.3., H.3. are first plotted and then subjected to statistical analyses 
+    # to check whether potential differences in these parameters are due to differences in weight and/or in genotype,
+    # (ANCOVA), or whether weight and genotypes interact (ANOVA with interactions or ANCOVA for non-parallel slopes). 
     if(parameter[i] %in% special){
       v <- ggplot(data=dat.m, aes_string("WgStart", parameter[i], colour="Genotype")) +
         geom_point() +
@@ -162,40 +170,47 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
         ylab(names(parameter[i]))
       plots <- list.append(plots, v)
       
-      write.table("######################\n### ANCOVA RESULTS ###\n######################", file=paste0(folder, parameter[i], 
-        "_ANCOVA_statistics.txt"), quote=F, row.names=F, col.names=F)
+      # ANCOVA statistical results are stored in the corresponding *_ANCOVA_statistics.txt files
+      # This test aims at determining whether the genotype has any statistical significant impact on the parameter 
+      # under study while controlling for the covariate "weight", that is, if the potential differences found in a 
+      # specific parameter are due to their different genotype or to differences in weight 
+      write.table("######################################################################\n########################### ANCOVA RESULTS ###########################\n######################################################################", 
+                  file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), quote=F, row.names=F, col.names=F)
       
      for (k in 1:length(dat.ph)){
         phase <- names(dat.ph)[k]
-        write.table(paste0("\n###################\n### ", phase, " phase ###\n###################\n"), file=paste0(folder, 
-          parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
+        write.table(paste0("\n\n######################################################################\n############################# ", phase, " phase ############################\n######################################################################"), 
+                    file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
         
-        ancova <- aov(dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["WgStart"]] + dat.ph[[k]][["Genotype"]])
-        write.table("\n### WITHOUT INTERACTIONS ###\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), 
+        eq <- paste0(parameter[[i]], "~WgStart+Genotype")
+        ancova <- glm(eq, data=dat.ph[[k]], family=gaussian(link="identity"))
+        write.table("\n###################### ANCOVA (NO INTERACTIONS) ######################\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), 
           append=T, quote=F, row.names=F, col.names=F)
         capture.output(summary(ancova), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
-        
-        ###THERE ARE TWO RESULTS: WG AND GENOTYPE. HOWEVER, HERE I ONLY SELECT FOR GENOTYPE, I DON'T KNOW WHY
-        if(summary(ancova)[[1]][["Pr(>F)"]][[2]]<0.05){
-          write.table(paste(parameter[i], "without interaction (ANCOVA)", sep=" "), "./Results/Significant_5e-2_boxplots.txt", quote=FALSE, append=T, row.names=F, col.names=F)
+
+        # If a given genotype has a significant impact on the parameter under study while controlling for the weight,
+        # it is included in the summary results file. If more than one genotype is being analysed, it is determined with
+        # a TukeyHSD post-hoc test and included in the results file.
+        if(sum(summary(ancova)$coeff[-(1:2),nrow(summary(ancova)$coeff)]<0.05)>0){
+          write.table(paste(parameter[i], "without interaction (ANCOVA)", sep=" "), 
+                      "./Results/Significant_5e-2_boxplots.txt", quote=FALSE, append=T, row.names=F, col.names=F)
           if(genotype_no>2){
-            tukey <- TukeyHSD(ancova)
+            tukey <- glht(ancova,mcp(Genotype="Tukey"))
             write.table("\n# Tukey multiple pairwise comparisons #\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-            capture.output(tukey, file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
+            capture.output(summary(tukey), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
           }
         }
         
-        aov_residuals <- residuals(object=ancova)
-        shap <- shapiro.test(x=aov_residuals )
+        form <- paste0(parameter[i]," ~ Genotype")
+        caption <- paste(parameter[i], "- Phase:", phase, "- Warning in ANCOVA (without interaction)", sep=" ")
+        assumptions(form, dat.ph[[k]], ancova, caption)
         
-        if(shap$p.value<0.05){
-          write.table(paste("\n\n", parameter[i], "- Phase:", phase, "- Warning in Shapiro-Wilk's test without interaction", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-          write.table(paste(parameter[i], "- Phase:", phase, "- Warning in Shapiro-Wilk's test without interaction", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-          capture.output(shap, file="./Results/Warnings.txt", append=T)
-        }
+   
+        #eq2 <- paste0(parameter[[i]], "~WgStart*Genotype")
+        eq2 <- paste0(parameter[[i]], "~Genotype+WgStart+Genotype*WgStart")
         
-        ancova_int <- aov(dat.ph[[k]][[parameter[i]]] ~ dat.ph[[k]][["WgStart"]] * dat.ph[[k]][["Genotype"]])
-        write.table("\n### WITH INTERACTIONS ###\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
+        ancova_int <- do.call("aov", list(as.formula(eq2), data=dat.ph[[k]]))
+        write.table("\n###### ANOVA WITH INTERACTIONS OR ANCOVA FOR NON-PARALLEL SLOPES #####\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
         capture.output(summary(ancova_int), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
         
         if(summary(ancova_int)[[1]][["Pr(>F)"]][[2]]<0.05){
@@ -210,8 +225,8 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
         aov_residuals_int <- residuals(object=ancova_int)
         shap_int <- shapiro.test(x=aov_residuals_int )
         if(shap_int$p.value<0.05){
-          write.table(paste("\n\n", parameter[i], "Phase:", phase, "- Warning in Shapiro-Wilk's test with interaction", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-          write.table(paste(parameter[i], "Phase:", phase, "- Warning in Shapiro-Wilk's test with interaction", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+          write.table(paste("\n\n", parameter[i], "Phase:", phase, "- Warning in Shapiro-Wilk's - ANOVA test with interactions", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+          write.table(paste(parameter[i], "Phase:", phase, "- Warning in Shapiro-Wilk's - ANOVA test with interactions", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
           capture.output(shap_int, file="./Results/Warnings.txt", append=T)
         }
         
@@ -396,6 +411,25 @@ processFile <- function(filepath) {
   return(i)
 }
 
+# assumptions() takes a statistical object and performs the Bartlett's and Shapiro-Wilk's tests to check for homogeneity 
+# of variances and normality of residuals, respectively. Significant results are included in the Warning files.
+assumptions <- function(form, dataframe, object, caption){
+  bartlett <- bartlett.test(formula=as.formula(form), data=dataframe)
+  if (bartlett$p.value<0.05){
+    write.table(paste0("\n\n", caption, " - Bartlett's test"), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+    write.table(paste0(caption, " - Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+    capture.output(bartlett, file="./Results/Warnings.txt", append=T)
+  }
+  
+  aov_residuals <- residuals(object)
+  shap <- shapiro.test(x=aov_residuals)
+  if(shap$p.value<0.05){
+    write.table(paste0("\n\n", caption, " - Shapiro-Wilk's test"), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+    write.table(paste0(caption, " - Shapiro-Wilk's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+    capture.output(shap, file="./Results/Warnings.txt", append=T)
+  }
+}
+
 ## ARGUMENTS
 # Defining and storing the script arguments
 option_list <- list(make_option(c("-f", "--file"), type="character", default=NULL, help="Input data file", metavar="character"),
@@ -534,7 +568,18 @@ data$AvgSpeed[is.na(data$AvgSpeed)] <- 0
 dir.create("./Results")
 write.table(data, "./Results/Formatted_dataset.txt", quote=F, col.names=TRUE, row.names=F)
 
-# Creating files for only significant pvalues and warnings
+# Creating files for only significant pvalues and warnings:
+# 1) Significant_5e-2_boxplots.txt: Summary file specifying which parameters are statistically significant (ANOVA
+# pvalue < 0.05), and in which phase in the analyses of boxplot data. Details of the analysis can be found in the 
+# corresponding *_boxplots_statistics.txt files (see plot_bxplt() above)
+# 2) Significant_5e-2_meanovertimepoints.txt: Summary file specifying which parameters are statistically significant, 
+# (ANOVA pvalue < 0.05) and in which phase and specific time point, as a result of the analyses with mean plots. 
+# Statistical details can be found in the corresponding *_statistics.txt files (see plot_mean() above)
+# 3) Warnings.txt: File specifying detailed information regarding those one-way ANOVA statistical analyses where care 
+# should be taken before reaching conclusions because one or both of the underlying assumptions (homogeneity of 
+# variances and normality) are not met
+# 4) Warnings_summary.txt: Summary file containing in which ANOVA statistical analysis (parameter, plot type,
+# timepoint/phase), the underlying assumptions (homogeneity of variances and normality) are not met
 write.table("PARAMETERS WITH STATISTICALLY SIGNIFICANT DIFFERENCES IN BOXPLOTS (pval<0.05)\n", 
             "./Results/Significant_5e-2_boxplots.txt", quote=F, col.names=F, row.names=F)
 write.table("PARAMETERS AND TIMEPOINTS WITH STATISTICALLY SIGNIFICANT DIFFERENCES IN ANOVA (pval<0.05)", 
@@ -543,9 +588,10 @@ write.table("WARNINGS BEFORE CONSIDERING ANOVA RESULS", "./Results/Warnings.txt"
 write.table("WARNINGS BEFORE CONSIDERING ANOVA RESULS - SUMMARY", "./Results/Warnings_summary.txt", quote=F, col.names=F, 
             row.names=F)
 
-# One-way ANOVA test for weight data. Tukey post-hoc test is applied if more than 2 genotypes are being compared.
+# One-way ANOVA test for weight data. Tukey HSD post-hoc test is applied if more than 2 genotypes are being compared.
 # Homogeneity of variances and normality assumptions are checked with the Barlett's and Shapiro-Wilk tests, respectively.
 res.aovwg <- aov(data=weight_data, WgStart ~ Genotype)
+
 write.table("######################################################\n#################### ANOVA RESULTS ###################\n######################################################\n\n", 
             file="./Results/ANOVA_weight.txt", quote=F, row.names=F, col.names=F)
 capture.output(summary(res.aovwg), file="./Results/ANOVA_weight.txt", append=T)
@@ -620,11 +666,16 @@ if(!is.null(opt$calorimetry)){
   folder <- "./Results/Calorimetry/"
   cat("\nGenerating calorimetry plots...\n")
   
+  # All warnings regarding statistical analyses that are generated with the plot_ind(), plot_bxplt() and plot_mean() 
+  # functions, will be stored in the corresponding warning files under the CALORIMETRY subheading. Even if no
+  # warnings are produced, these subheadings will appear to inform the user that the program ran succesfully but 
+  # without warnings.
   write.table("\n\n###############################\n######### CALORIMETRY #########\n###############################",
               "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n\n###############################\n######### CALORIMETRY #########\n###############################",
               "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, row.names=F)
   
+  # Specifying the calorimetry parameters and units
   calo <- c("Flow per box (L/min)"="Flow", "Temperature (ºC)"="Temp", "O2 concentration (%)"="O2", 
             "CO2 concentration (%)"="CO2", "Difference in O2 concentration relative to the chamber (%)"="dO2", 
             "Difference in CO2 concentration relative to the chamber (%)"="dCO2", 
@@ -647,7 +698,7 @@ if(!is.null(opt$calorimetry)){
                     theme_bw() +
                     theme(strip.background=element_rect(fill="white"), strip.text=element_text(face="bold")) +
                     scale_color_locuszoom() +
-                    xlab("Total running222 distance covered (cm)"))) 
+                    xlab("Total running distance covered (cm)"))) 
   invisible(print(ggplot(data[data$SumR.L>0,], aes_string(x="SumR.L", y="RER", colour="Phase", shape="Genotype")) +
                     geom_point(size=1) + 
                     facet_wrap(~Animal) +
@@ -677,17 +728,21 @@ if(!is.null(opt$calorimetry)){
   graphics.off()
 }
 
-# Plotting activity values if requested with the -a (--activity) argument
+# Plotting activity values if requested with the -a (--activity) argument using the plot_ind(), plot_bxplt() and 
+# plot_mean() functions. Results are stored in the Activity folder.
 if(!is.null(opt$activity)){
   dir.create("./Results/Activity")
   folder <- "./Results/Activity/"
   cat("\nGenerating activity plots...\n")
   
+  # All warnings regarding statistical analyses that are generated with the plot_ind(), plot_bxplt() and plot_mean() 
+  # functions, will be stored in the corresponding warning files under the ACTIVITY subheading. 
   write.table("\n\n###############################\n#########   ACTIVITY  #########\n###############################",
               "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n\n###############################\n#########   ACTIVITY  #########\n###############################",
               "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, row.names=F)
   
+  # Specifying the activity parameters and units
   activity <- c("Total XY-beam interruptions (counts)"="XT.YT", "Total X-beam interruptions (counts)"="XT", 
                 "Ambulatory X-beam interruptions (counts)"="XA", "Fine movement X-beam interruptions (counts)"="XF", 
                 "Total Y-beam interruptions (counts)"="YT", "Ambulatory Y-beam interruptions (counts)"="YA", 
@@ -750,17 +805,21 @@ if(!is.null(opt$activity)){
   graphics.off()
 }
 
-# Plotting DFW values if requested with the -d (--dfw) argument
+# Plotting DFW values if requested with the -d (--dfw) argument using the plot_ind(), plot_bxplt() and 
+# plot_mean() functions. Results are stored in the DFW folder.
 if(!is.null(opt$dfw)){
   dir.create("./Results/DFW")
   folder <- "./Results/DFW/"
   cat("\nGenerating DFW plots...\n")
   
+  # All warnings regarding statistical analyses that are generated with the plot_ind(), plot_bxplt() and plot_mean() 
+  # functions, will be stored in the corresponding warning files under the DFW subheading. 
   write.table("\n\n###############################\n#########     DFW     #########\n###############################", 
               "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n\n###############################\n#########     DFW     #########\n###############################", 
               "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, row.names=F)
   
+  # Specifying the activity parameters and units
   if(interval=="no"){
     dfw <- c("Water consumption (mL)"="Drink", "Food consumption (g)"="Feed", "Weight (g)"="Weight")
   } else{
@@ -784,17 +843,21 @@ if(!is.null(opt$dfw)){
   graphics.off()
 }
 
-# Plotting wheel values if requested with the -l (--wheel) argument
+# Plotting wheel values if requested with the -l (--wheel) argument using the plot_ind(), plot_bxplt() and 
+# plot_mean() functions. Results are stored in the Wheels folder.
 if(!is.null(opt$wheel)){
   dir.create("./Results/Wheels")
   folder <- "./Results/Wheels/"
   cat("\nGenerating wheel plots...\n")
   
+  # All warnings regarding statistical analyses that are generated with the plot_ind(), plot_bxplt() and plot_mean() 
+  # functions, will be stored in the corresponding warning files under the WHEELS subheading. 
   write.table("\n\n###############################\n#########   WHEELS   ##########\n###############################", 
               "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n\n###############################\n#########   WHEELS   ##########\n###############################", 
               "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, row.names=F)
   
+  # Specifying the activity parameters and units
   wheel <- c("Distance covered to the right (cm)"="Right", "Distance covered to the left (cm)"="Left", 
            "Total distance covered (cm)"="SumR.L", "Total running duration (min)"="SumTime", 
            "Total number of running episodes"="SumRuns")
