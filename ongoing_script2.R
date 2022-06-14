@@ -56,8 +56,8 @@ library("multcomp")
   
 ## DEFINING FUNCTIONS
 
-# processFile() takes the input raw data file and defines how many lines to skip before start reading, which is one line 
-# after finding "Date" in the first column
+# processFile() takes the input raw data file and returns how many lines to skip before start reading, which is one line 
+# after finding "Date" in the first column.
 processFile <- function(filepath) {
   con <- file(filepath, "r")
   keep_on <- TRUE
@@ -78,25 +78,131 @@ processFile <- function(filepath) {
 # It also takes raw data (dataframe) and the variables to test (form) to perform the Bartlett's test to check for  
 # homogeneity of variances. Significant results are included in the Warning files, indicating which statistical analysis
 # (caption) needs to be carefully considered.
-assumptions <- function(form, dataframe, object, caption){
+assumptions <- function(form, dataframe, object, caption, plot_type){
+  # Bartlett's test to check for homogeneity of variances.
   bartlett <- bartlett.test(formula=as.formula(form), data=dataframe)
   if (bartlett$p.value<0.05){
-    write.table(paste0("\n\n", caption, " - Bartlett's test"), file="./Results/Warnings.txt", append=T, quote=F, 
-                row.names=F, col.names=F)
-    write.table(paste0(caption, " - Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
-                row.names=F, col.names=F)
+    if(plot_type=="meanplot"){
+      write.table(paste0("\n\n", caption, "- Bartlett's test",), file="./Results/Warnings.txt", append=T, quote=F, 
+                  row.names=F, col.names=F)
+      write.table(paste0(caption, "- Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
+                  row.names=F, col.names=F)
+    } else if(plot_type=="boxplot"){
+      write.table(paste0("\n\n", caption, " - Bartlett's test"), file="./Results/Warnings.txt", append=T, quote=F, 
+                  row.names=F, col.names=F)
+      write.table(paste0(caption, " - Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
+                  row.names=F, col.names=F)
+    }
     capture.output(bartlett, file="./Results/Warnings.txt", append=T)
   }
   
+  # Shapiro-Wilk's test to check for normality of residuals.
   aov_residuals <- residuals(object)
   shap <- shapiro.test(x=aov_residuals)
   if(shap$p.value<0.05){
+    if(plot_type=="meanplot"){
+      write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+      write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+    } else if(plot_type=="boxplot"){
     write.table(paste0("\n\n", caption, " - Shapiro-Wilk's test"), file="./Results/Warnings.txt", append=T, quote=F, 
                 row.names=F, col.names=F)
     write.table(paste0(caption, " - Shapiro-Wilk's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
                 row.names=F, col.names=F)
+    }
     capture.output(shap, file="./Results/Warnings.txt", append=T)
   }
+}
+
+# statistics() takes data in the form of a dataframe and performs a one-way ANOVA statistical test. If more than two
+# genotypes are analysed, it also performs Tukey's HSD post-hoc testing. It returns a list with ANOVA and Tukey results 
+# as well as a variable, "sign" that indicates if statistically significant results were obtained. This functions calls
+# assumptions() to test ANOVA assumptions.
+statistics <- function(dataframe, plot_type){
+  # Definition of some variables.
+  genotypes <- length(unique(dataframe$Genotype))
+  if(plot_type=="boxplot"){
+    param <- names(dataframe)[5]
+    phase <- unique(dataframe$Phase)
+    caption <- paste(param, "- Phase:", phase, "- Warning in ANOVA", sep=" ")
+  } else if(plot_type=="meanplot"){
+    param <- names(dataframe)[2]
+    tp <- as.numeric(unique(dataframe$Timepoint))
+    caption <- paste(param, "- Timepoint:", tp, "- Warning in ANOVA", sep=" ")
+  }
+  
+  # One-way ANOVA.
+  eq <- paste0(param, "~Genotype")
+  anova <- glm(eq, data=dataframe, family=gaussian(link="identity"))
+  
+  # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
+  sign <- "no"
+  tukey <- "no"
+  if(sum(summary(anova)$coeff[-1,ncol(summary(anova)$coeff)]<0.05)>0){
+    sign <- "yes"
+    if(genotypes>2){
+      tukey <- glht(anova,mcp(Genotype="Tukey"))
+    }
+  }
+  
+  # Testing ANOVA assumptions with the assumptions() function.
+  assumptions(eq, dataframe, anova, caption, plot_type)
+  
+  # Returning results.
+  results <- list(anova, tukey, sign)
+  return(results)
+}
+
+# special_statistics() performs additional statistical tests in special parameters that may be influenced by the animal 
+# weight. It functions similarly to the statistics() function.
+special_statistics <- function(dataframe, plot_type){
+  # Definition of some variables.
+  genotypes <- length(unique(dataframe$Genotype))
+  parameter <- names(dataframe)[5]
+  phase <- unique(dataframe$Phase)
+  
+  # ANCOVA (NO INTERACTIONS) analysis: this test aims at determining whether the genotype has any statistical
+  # significant impact on the parameter under study while controlling for the covariate "weight", that is, if the 
+  # potential differences found in a specific parameter are due to their different genotype or to differences in weight.
+  eq <- paste0(parameter, "~WgStart+Genotype")
+  ancova <- glm(eq, data=dataframe, family=gaussian(link="identity"))
+
+  # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
+  sign <- "no"
+  tukey <- "no"
+  if(sum(summary(ancova)$coeff[-(1:2),ncol(summary(ancova)$coeff)]<0.05)>0){
+    sign <- "yes"
+    if(genotypes>2){
+      tukey <- glht(ancova,mcp(Genotype="Tukey"))
+    }
+  }
+    
+  # Testing ANCOVA assumptions with the assumptions() function.
+  caption <- paste(parameter, "- Phase:", phase, "- Warning in ANCOVA (without interaction)", sep=" ")
+  form <- paste0(parameter, "~Genotype")
+  assumptions(form, dataframe, ancova, caption, plot_type)
+    
+  # ANOVA WITH INTERACTIONS OR ANCOVA FOR NON-PARALLEL SLOPES analysis: this test determines whether weight and 
+  # genotypes interact influencing a particular parameter.
+  eq2 <- paste0(parameter, "~WgStart+Genotype+WgStart:Genotype")
+  ancova_int <- glm(eq2, data=dataframe, family=gaussian(link="identity"))
+
+  # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
+  sign_int <- "no"
+  tukey_int <- "no"
+  if(sum(summary(ancova_int)$coeff[-(1:2),ncol(summary(ancova_int)$coeff)]<0.05)>0){
+    sign_int <- "yes"
+    if(genotypes>2){
+      tukey_int <- glht(ancova_int,mcp(Genotype="Tukey"))
+    }
+  }
+    
+  # Testing assumptions with the assumptions() function.
+  caption_int <- paste(parameter, "- Phase:", phase, "- Warning in ANOVA with interactions", sep=" ")
+  assumptions(form, dataframe, ancova_int, caption_int, plot_type)
+
+  # Returning results.
+  results_special <- list(ancova, tukey, sign, ancova_int, tukey_int, sign_int)
+  return(results_special)
 }
 
 # plot_ind() takes as inputs the whole dataset, the parameter to plot, as well as the dark and light periods and plot labels,  
@@ -146,19 +252,19 @@ plot_ind <- function(parameter, data, dark_phase, plot_labels){
 # corresponding analyses are not met.
 plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
   # Appending "In boxplots" in the warning files, which contain information regarding the statistical tests
-  # that do not meet the underlying assumptions of homogeneity of variances and normality
+  # that do not meet the underlying assumptions of homogeneity of variances and normality.
   write.table("\n######### In boxplots #########", "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n######### In boxplots #########", "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, 
               row.names=F)
-  # Definition of some variables
+  # Definition of some variables.
   special <- c ("VO2.3.", "VCO2.3.", "H.3.")
   plots <- list()
   genotype_no <- length(unique(data$Genotype))
   
-  # For each of the parameters to plot: 1) calculation of mean data during the light and dark cycles, 2) plotting
+  # For each of the parameters to plot: 1) calculation of mean data during the light and dark cycles, 2) plotting.
   for (i in 1:length(parameter)){
     
-    # Calculation of mean data during the light and dark cycles for plots
+    # Calculation of mean data during the light and dark cycles for plots.
     meandata <- unique(data[c("Genotype", "Animal", "WgStart")])
     meandata <- cbind(meandata, "LIGHT"=rep(0, nrow(meandata)), "DARK"=rep(0, nrow(meandata)))
     for(y in 1:nrow(meandata)){
@@ -199,9 +305,10 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
     
     dat.ph <- list("Light"=dat.m[dat.m$Phase=="LIGHT",], "Dark"=dat.m[dat.m$Phase=="DARK",])
     
-    # Special parameters VO2.3., VCO2.3., H.3. are first plotted and then subjected to statistical analyses 
-    # to check whether potential differences in these parameters are due to differences in weight and/or in genotype,
-    # (ANCOVA), or whether weight and genotypes interact (ANOVA with interactions or ANCOVA for non-parallel slopes). 
+    # Special parameters VO2.3., VCO2.3., H.3. are first plotted and then subjected to statistical analyses with the 
+    # special_statistics() function to check whether potential differences in these parameters are due to differences 
+    # in weight and/or in genotype, (ANCOVA), or whether weight and genotypes interact (ANOVA with interactions or 
+    # ANCOVA for non-parallel slopes). 
     if(parameter[i] %in% special){
       v <- ggplot(data=dat.m, aes_string("WgStart", parameter[i], colour="Genotype")) +
         geom_point() +
@@ -215,99 +322,82 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
         ylab(names(parameter[i]))
       plots <- list.append(plots, v)
       
-      # ANCOVA statistical results are stored in the corresponding *_ANCOVA_statistics.txt files
-      # This test aims at determining whether the genotype has any statistical significant impact on the parameter 
-      # under study while controlling for the covariate "weight", that is, if the potential differences found in a 
-      # specific parameter are due to their different genotype or to differences in weight 
+      # Statistical results are stored in the corresponding *_ANCOVA_statistics.txt files.
       write.table("######################################################################\n########################### ANCOVA RESULTS ###########################\n######################################################################", 
                   file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), quote=F, row.names=F, col.names=F)
       
-     for (k in 1:length(dat.ph)){
+      for (k in 1:length(dat.ph)){
         phase <- names(dat.ph)[k]
+        
+        # Calling the special_statistics() function.
+        stats_res_special <- special_statistics(dat.ph[[k]], "boxplot")
+        names(stats_res_special) <- c("ancova", "tukey_anc", "sign_anc", "ancova_int", "tukey_int", "sign_int")
+        
+        # ANCOVA (NO INTERACTIONS) results.
         write.table(paste0("\n\n######################################################################\n############################# ", phase, " phase ############################\n######################################################################"), 
                     file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-        
-        # ANCOVA (NO INTERACTIONS) analysis
-        eq <- paste0(parameter[[i]], "~WgStart+Genotype")
-        ancova <- glm(eq, data=dat.ph[[k]], family=gaussian(link="identity"))
         write.table("\n###################### ANCOVA (NO INTERACTIONS) ######################\n", file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), 
           append=T, quote=F, row.names=F, col.names=F)
-        capture.output(summary(ancova), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
+        capture.output(summary(stats_res_special$ancova), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
 
-        # If a given genotype has a significant impact on the parameter under study while controlling for the weight,
-        # it is included in the summary results file. If more than one genotype is being analysed, it is determined with
-        # a TukeyHSD post-hoc test and included in the results file.
-        if(sum(summary(ancova)$coeff[-(1:2),ncol(summary(ancova)$coeff)]<0.05)>0){
+        if(stats_res_special$sign_anc=="yes"){
           write.table(paste(parameter[i], "without interaction (ANCOVA)", sep=" "), 
                       "./Results/Significant_5e-2_boxplots.txt", quote=FALSE, append=T, row.names=F, col.names=F)
-          if(genotype_no>2){
-            tukey <- glht(ancova,mcp(Genotype="Tukey"))
+          if(stats_res_special$tukey_anc!="no"){
             write.table("\n#### Tukey multiple pairwise comparisons ####\n", file=paste0(folder, parameter[i], 
                        "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-            capture.output(summary(tukey), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
+            capture.output(summary(stats_res_special$tukey_anc), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
           }
         }
         
-        # Testing ANCOVA assumptions with the assumptions() function.
-        form <- paste0(parameter[i]," ~ Genotype")
-        caption <- paste(parameter[i], "- Phase:", phase, "- Warning in ANCOVA (without interaction)", sep=" ")
-        assumptions(form, dat.ph[[k]], ancova, caption)
-        
-        # ANOVA WITH INTERACTIONS OR ANCOVA FOR NON-PARALLEL SLOPES analysis. Same as in the previous section.
-        eq2 <- paste0(parameter[[i]], "~WgStart+Genotype+WgStart:Genotype")
-        ancova_int <- glm(eq2, data=dat.ph[[k]], family=gaussian(link="identity"))
+        # ANOVA WITH INTERACTIONS OR ANCOVA FOR NON-PARALLEL SLOPES results.
         write.table("\n###### ANOVA WITH INTERACTIONS OR ANCOVA FOR NON-PARALLEL SLOPES #####\n", file=paste0(folder, 
                       parameter[i], "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-        capture.output(summary(ancova_int), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
+        capture.output(summary(stats_res_special$ancova_int), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
         
-        if(sum(summary(ancova_int)$coeff[-(1:2),ncol(summary(ancova_int)$coeff)]<0.05)>0){
+        if(stats_res_special$sign_int=="yes"){
           write.table(paste(parameter[i], "with interaction (ANCOVA for non-parallel slopes)", sep=" "), 
                       "./Results/Significant_5e-2_boxplots.txt", quote=FALSE, append=T, row.names=F, col.names=F)
-          if(genotype_no>2){
-            tukey_int <- glht(ancova_int,mcp(Genotype="Tukey"))
+          if(stats_res_special$tukey_int!="no"){
             write.table("\n#### Tukey multiple pairwise comparisons ####\n", file=paste0(folder, parameter[i], 
                        "_ANCOVA_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-            capture.output(summary(tukey_int), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
+            capture.output(summary(stats_res_special$tukey_int), file=paste0(folder, parameter[i], "_ANCOVA_statistics.txt"), append=T)
           }
         }
-        caption_int <- paste(parameter[i], "- Phase:", phase, "- Warning in ANOVA with interactions", sep=" ")
-        assumptions(form, dat.ph[[k]], ancova_int, caption_int)
-        }
+        
+      }
     }
     
-    # For all parameters, including the special ones, one-way ANOVA is performed to compare boxplot averaged data. If more
-    # than two genotypes are being analysed, a TukeyHSD post-hoc test is performed. ANOVA assumptions are checked with the
-    # assumptions() function
+    # For all parameters, including the special ones, one-way ANOVA is performed to compare boxplot averaged data with the
+    # statistics() function. 
+    # Preparing data.
     meansddat.m <- summarySE(dat.m, measurevar=parameter[[i]], groupvars=c("Genotype", "Phase"))
     colnames(meansddat.m) <- c("Genotype", "Phase", "N", parameter[i], "sd", "se", "ci")
     meansddat.m <- meansddat.m %>% mutate_if(is.numeric, round, digits=3)
     write.table(as.matrix(meansddat.m), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), 
                 quote=F, col.names=TRUE, row.names=F, sep="\t")
     
+    # Calling the statistics() function at each phase.
     for (k in 1:length(dat.ph)){
       phase <- names(dat.ph)[k]
+      stats_res <- statistics(dat.ph[[k]], "boxplot")
+      names(stats_res) <- c("anova","tukey","sign")
+      
       write.table(paste0("\n###################\n### ", phase, " phase ###\n###################\n"), 
                   file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
+      capture.output(summary(stats_res$anova), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T)
       
-      eq <- paste0(parameter[[i]], "~Genotype")
-      anova <- glm(eq, data=dat.ph[[k]], family=gaussian(link="identity"))
-      capture.output(summary(anova), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T)
-      
-      if(sum(summary(anova)$coeff[-1,ncol(summary(anova)$coeff)]<0.05)>0){
+      if(stats_res$sign=="yes"){
         write.table(paste0(parameter[i], " in the ", phase, " phase"), "./Results/Significant_5e-2_boxplots.txt", 
                     quote=FALSE, append=T, row.names=F, col.names=F, sep="\t")
-        if(genotype_no>2){
-          tukey_aov <- glht(anova,mcp(Genotype="Tukey"))
+        if(stats_res$tukey!="no"){
           write.table("\n#### Tukey multiple pairwise comparisons ####\n", file=paste0(folder, parameter[i], 
                       "_boxplots_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-          capture.output(summary(tukey_aov), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T)
+          capture.output(summary(stats_res$tukey), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T)
         }
       }
       
-      form <- paste0(parameter[i]," ~ Genotype")
-      caption_aov <- paste(parameter[i], "- Phase:", phase, "- Warning in ANOVA", sep=" ")
-      assumptions(form, dat.ph[[k]], anova, caption_aov)
-      }
+    }
     
   }
   return(plots)
@@ -319,7 +409,7 @@ plot_bxplt <- function(parameter, data, pval_wg, folder, dark_phase){
 # for the corresponding analyses are not met.
 plot_mean <- function(parameter, data, folder, dark_phase, plot_labels){
   # Appending "In meanplots" in the warning files, which contain information regarding the one-way ANOVA statistical tests
-  # that do not meet the underlying assumptions of homogeneity of variances and normality
+  # that do not meet the underlying assumptions of homogeneity of variances and normality.
   write.table("\n######### In meanplots #########", "./Results/Warnings.txt", append=T, quote=F, col.names=F, row.names=F)
   write.table("\n######### In meanplots #########", "./Results/Warnings_summary.txt", append=T, quote=F, col.names=F, 
               row.names=F)
@@ -328,7 +418,7 @@ plot_mean <- function(parameter, data, folder, dark_phase, plot_labels){
   genotype_no <- length(unique(data$Genotype))
   TPvsP <- unique(data[c("TimePoint", "Phase")])
 
-  # For each parameter, data are first formatted for proper analysis. Next, meanplots are plotted
+  # For each parameter, data are first formatted for proper analysis. Next, meanplots are plotted.
   for (i in 1:length(parameter)){
     # Formatting data
     meansddf <- summarySE(data, measurevar=parameter[[i]], groupvars=c("Genotype", "TimePoint"))
@@ -354,72 +444,74 @@ plot_mean <- function(parameter, data, folder, dark_phase, plot_labels){
     colnames(meansddf) <- c("Genotype", "TimePoint", "N", parameter[[i]], "sd", "se", "ci", "Phase")
     
     pval <- list()
-    sign <- list()
-    tukey <- list()
-    signtp <- list()
+    sign <- c()
+    tukey <- c()
+    signtp <- c()
     n <- 0
-    
-    
-    #capture.output(summary(anova), file=paste0(folder, parameter[i], "_boxplots_statistics.txt"), append=T)
-    
     
     # One-way ANOVA followed by a Tukey HSD post-hoc test are performed for each timepoint
     for (j in 1:length(unique(data$TimePoint))){
       data.tp <- data[data$TimePoint==j, c("Genotype", parameter[[i]])]
-      eq <- paste0(parameter[[i]], "~Genotype")
-      anova <- glm(eq, data=data.tp, family=gaussian(link="identity"))
+      data.tp$Timepoint <- j
+      
+      mean_stats_res <- statistics(data.tp, "meanplot")
+      names(mean_stats_res) <- c("anova","tukey","sign")
       
       #res.aov.data.tp <- aov(data.tp[[parameter[i]]] ~ data.tp$Genotype)
-      pval[j] <- summary(res.aov.data.tp)[[1]][["Pr(>F)"]][[1]] #como ahora habrán dos pval, coger el mínimo en vez de sumar
-      if(pval[j]=="NaN"){
-        pval[j] <- 1
-      }
+      coeffs <- summary(mean_stats_res$anova)$coeff[-(1),ncol(summary(mean_stats_res$anova)$coeff)]
+      pval[[j]] <- data.frame(pvalue=coeffs,significance=rep(".",length(coeffs)))
       
-      if(pval[j]<1e-3){
-        sign[j] <- "****"
-      } else if(pval[j]<5e-3){
-        sign[j] <- "***"
-      } else if(pval[j]<1e-2){
-        sign[j] <- "**"
-      } else if(pval[j]<5e-2){
-        sign[j] <- "*"
-      } else{
-        sign[j] <- "."
-      }
+      # if(pval[j]=="NaN"){
+      #   pval[j] <- 1
+      # }
       
-      bartlett.data.tp <- bartlett.test(data.tp[[parameter[i]]] ~ data.tp$Genotype)
-      if(bartlett.data.tp$p.value=="NaN"){
-        bartlett.data.tp$p.value <- 1
-      } else{
-        
-        if (bartlett.data.tp$p.value<0.05){
-          write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-          write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-          capture.output(bartlett.data.tp, file="./Results/Warnings.txt", append=T)
-        }
-        
-        aov_residuals.data.tp <- residuals(object=res.aov.data.tp)
-        shap.data.tp <- shapiro.test(x=aov_residuals.data.tp )
-        if (shap.data.tp$p.value<0.05){
-          write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-          write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-          capture.output(shap.data.tp, file="./Results/Warnings.txt", append=T)
-        }
+      for(h in 1:nrow(pval[[j]])){
+        if(pval[[j]]$pvalue[h]<1e-3){
+          pval[[j]]$significance[h] <- "****"
+        } else if(pval[[j]]$pvalue[h]<5e-3){
+          pval[[j]]$significance[h] <- "***"
+        } else if(pval[[j]]$pvalue[h]<1e-2){
+          pval[[j]]$significance[h] <- "**"
+        } else if(pval[[j]]$pvalue[h]<5e-2){
+          pval[[j]]$significance[h] <- "*"
+        } 
       }
+     
       
-      if(genotype_no>2 && pval[j]<0.05){
+      
+      if(mean_stats_res$sign=="yes"){
         n <- n+1
-        
-        tukey[n] <- TukeyHSD(res.aov.data.tp)
-        
         signtp[n] <- j
+        if(mean_stats_res$tukey!="no"){
+          tukey[n] <- mean_stats_res$tukey
+        }
       }
+  
+#      bartlett.data.tp <- bartlett.test(data.tp[[parameter[i]]] ~ data.tp$Genotype)
+#     if(bartlett.data.tp$p.value=="NaN"){
+      #        bartlett.data.tp$p.value <- 1
+      #      } else{
+        
+      #        if (bartlett.data.tp$p.value<0.05){
+      #          write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+      #          write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+      #         capture.output(bartlett.data.tp, file="./Results/Warnings.txt", append=T)
+      #       }
+        
+      #       aov_residuals.data.tp <- residuals(object=res.aov.data.tp)
+      #       shap.data.tp <- shapiro.test(x=aov_residuals.data.tp )
+      #       if (shap.data.tp$p.value<0.05){
+      #         write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
+      #         write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
+      #         capture.output(shap.data.tp, file="./Results/Warnings.txt", append=T)
+      #  }
       
       
+
+  }
       
       
-    }
-    
+    #POR AQUI: AHORA HAY 1 PVALUE POR GENOTYPE EXCEPTO PARA EL DE REFERENCIA WT
     
     meansddf$pval <- as.numeric(rep(pval, genotype_no))
     meansddf$sign <- as.character(rep(sign, genotype_no))
