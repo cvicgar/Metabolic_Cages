@@ -81,9 +81,9 @@ processFile <- function(filepath) {
 assumptions <- function(form, dataframe, object, caption, plot_type){
   # Bartlett's test to check for homogeneity of variances.
   bartlett <- bartlett.test(formula=as.formula(form), data=dataframe)
-  if (bartlett$p.value<0.05){
+  if (is.na(bartlett$p.value) || bartlett$p.value<0.05){
     if(plot_type=="meanplot"){
-      write.table(paste0("\n\n", caption, "- Bartlett's test",), file="./Results/Warnings.txt", append=T, quote=F, 
+      write.table(paste0("\n\n", caption, "- Bartlett's test"), file="./Results/Warnings.txt", append=T, quote=F, 
                   row.names=F, col.names=F)
       write.table(paste0(caption, "- Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
                   row.names=F, col.names=F)
@@ -93,23 +93,37 @@ assumptions <- function(form, dataframe, object, caption, plot_type){
       write.table(paste0(caption, " - Bartlett's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
                   row.names=F, col.names=F)
     }
+  }
+  
+  if(!is.na(bartlett$p.value) && bartlett$p.value<0.05){
     capture.output(bartlett, file="./Results/Warnings.txt", append=T)
+  } else if (is.na(bartlett$p.value)){
+    test <- "Not possible to perform ANOVA testing"
+    write.table(test, file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
   }
   
   # Shapiro-Wilk's test to check for normality of residuals.
   aov_residuals <- residuals(object)
-  shap <- shapiro.test(x=aov_residuals)
-  if(shap$p.value<0.05){
+  shap <- tryCatch(shapiro.test(x=aov_residuals), error = function(e){invisible(e); shap <- 0})
+  if(shap==0 || shap$p.value<0.05){
     if(plot_type=="meanplot"){
-      write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-      write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-    } else if(plot_type=="boxplot"){
-    write.table(paste0("\n\n", caption, " - Shapiro-Wilk's test"), file="./Results/Warnings.txt", append=T, quote=F, 
+      write.table(paste0("\n\n", caption, "- Shapiro-Wilk's test"), file="./Results/Warnings.txt", append=T, quote=F, 
                 row.names=F, col.names=F)
-    write.table(paste0(caption, " - Shapiro-Wilk's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
+      write.table(paste0(caption, "- Shapiro-Wilk's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
+                row.names=F, col.names=F)
+    } else if(plot_type=="boxplot"){
+      write.table(paste0("\n\n", caption, " - Shapiro-Wilk's test"), file="./Results/Warnings.txt", append=T, quote=F, 
+                row.names=F, col.names=F)
+      write.table(paste0(caption, " - Shapiro-Wilk's test"), file="./Results/Warnings_summary.txt", append=T, quote=F, 
                 row.names=F, col.names=F)
     }
+  }
+  
+  if(shap!=0 && shap<0.05){
     capture.output(shap, file="./Results/Warnings.txt", append=T)
+  } else if (shap==0){
+    test <- "Not possible to perform ANOVA testing"
+    write.table(test, file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
   }
 }
 
@@ -137,13 +151,14 @@ statistics <- function(dataframe, plot_type){
   # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
   sign <- "no"
   tukey <- "no"
-  if(sum(summary(anova)$coeff[-1,ncol(summary(anova)$coeff)]<0.05)>0){
+  res <- sum(summary(anova)$coeff[-1,ncol(summary(anova)$coeff)]<0.05)
+  if(!is.na(res) && res>0){
     sign <- "yes"
     if(genotypes>2){
       tukey <- glht(anova,mcp(Genotype="Tukey"))
     }
   }
-  
+
   # Testing ANOVA assumptions with the assumptions() function.
   assumptions(eq, dataframe, anova, caption, plot_type)
   
@@ -169,7 +184,8 @@ special_statistics <- function(dataframe, plot_type){
   # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
   sign <- "no"
   tukey <- "no"
-  if(sum(summary(ancova)$coeff[-(1:2),ncol(summary(ancova)$coeff)]<0.05)>0){
+  res <- sum(summary(ancova)$coeff[-(1:2),ncol(summary(ancova)$coeff)]<0.05)
+  if(!is.na(res) && res>0){
     sign <- "yes"
     if(genotypes>2){
       tukey <- glht(ancova,mcp(Genotype="Tukey"))
@@ -189,7 +205,8 @@ special_statistics <- function(dataframe, plot_type){
   # Checking statistical significance and performing Tukey HSD post-hoc testing if applicable.
   sign_int <- "no"
   tukey_int <- "no"
-  if(sum(summary(ancova_int)$coeff[-(1:2),ncol(summary(ancova_int)$coeff)]<0.05)>0){
+  res_int <- sum(summary(ancova_int)$coeff[-(1:2),ncol(summary(ancova_int)$coeff)]<0.05)
+  if(!is.na(res_int) && res_int>0){
     sign_int <- "yes"
     if(genotypes>2){
       tukey_int <- glht(ancova_int,mcp(Genotype="Tukey"))
@@ -440,33 +457,29 @@ plot_mean <- function(parameter, data, folder, dark_phase, plot_labels){
       ylab(names(parameter[i]))
     
     plots <- list.append(plots, k)
-    
+
+    # One-way ANOVA followed by a Tukey's HSD post-hoc test are performed for each timepoint.
     colnames(meansddf) <- c("Genotype", "TimePoint", "N", parameter[[i]], "sd", "se", "ci", "Phase")
-    
     pval <- list()
-    sign <- c()
-    tukey <- c()
     signtp <- c()
+    tukey <- list()
     n <- 0
     
-    # One-way ANOVA followed by a Tukey HSD post-hoc test are performed for each timepoint
     for (j in 1:length(unique(data$TimePoint))){
       data.tp <- data[data$TimePoint==j, c("Genotype", parameter[[i]])]
       data.tp$Timepoint <- j
-      
       mean_stats_res <- statistics(data.tp, "meanplot")
       names(mean_stats_res) <- c("anova","tukey","sign")
       
-      #res.aov.data.tp <- aov(data.tp[[parameter[i]]] ~ data.tp$Genotype)
+      # Extracting pvalues.
       coeffs <- summary(mean_stats_res$anova)$coeff[-(1),ncol(summary(mean_stats_res$anova)$coeff)]
       pval[[j]] <- data.frame(pvalue=coeffs,significance=rep(".",length(coeffs)))
-      
-      # if(pval[j]=="NaN"){
-      #   pval[j] <- 1
-      # }
-      
+  
+      # Formatting significance levels according to pvalues.
       for(h in 1:nrow(pval[[j]])){
-        if(pval[[j]]$pvalue[h]<1e-3){
+        if(is.na(pval[[j]]$pvalue[h])){
+          pval[[j]]$significance[h] <- "NaN"
+        } else if(pval[[j]]$pvalue[h]<1e-3){
           pval[[j]]$significance[h] <- "****"
         } else if(pval[[j]]$pvalue[h]<5e-3){
           pval[[j]]$significance[h] <- "***"
@@ -477,67 +490,60 @@ plot_mean <- function(parameter, data, folder, dark_phase, plot_labels){
         } 
       }
      
-      
-      
+      # Storing Tukey's results in the corresponding timepoints.
       if(mean_stats_res$sign=="yes"){
         n <- n+1
         signtp[n] <- j
         if(mean_stats_res$tukey!="no"){
-          tukey[n] <- mean_stats_res$tukey
-        }
+          tukey[[n]] <- summary(mean_stats_res$tukey)
+        } 
       }
-  
-#      bartlett.data.tp <- bartlett.test(data.tp[[parameter[i]]] ~ data.tp$Genotype)
-#     if(bartlett.data.tp$p.value=="NaN"){
-      #        bartlett.data.tp$p.value <- 1
-      #      } else{
-        
-      #        if (bartlett.data.tp$p.value<0.05){
-      #          write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-      #          write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Bartlett's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-      #         capture.output(bartlett.data.tp, file="./Results/Warnings.txt", append=T)
-      #       }
-        
-      #       aov_residuals.data.tp <- residuals(object=res.aov.data.tp)
-      #       shap.data.tp <- shapiro.test(x=aov_residuals.data.tp )
-      #       if (shap.data.tp$p.value<0.05){
-      #         write.table(paste("\n\n", parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings.txt", append=T, quote=F, row.names=F, col.names=F)
-      #         write.table(paste(parameter[i], "- Timepoint:", j, "- Warning in Shapiro-Wilk's test", sep=" "), file="./Results/Warnings_summary.txt", append=T, quote=F, row.names=F, col.names=F)
-      #         capture.output(shap.data.tp, file="./Results/Warnings.txt", append=T)
-      #  }
+    }
       
-      
-
-  }
-      
-      
-    #POR AQUI: AHORA HAY 1 PVALUE POR GENOTYPE EXCEPTO PARA EL DE REFERENCIA WT
+    # pvalues and significance levels are added to the meansddf dataframe. First, this object is split by genotype. In 
+    # the resulting list, elements appear in the same order as the levels of data$Genotype, which can be modified by
+    # the user when calling the function. Whether it is modified or not, the reference level is always the first level.
+    # The pvalues and significance levels that appear in this dataframe are the result of the one-way ANOVA tests 
+    # performed between the reference level and each of the rest of the genotypes. Thus, these columns contain "1"
+    # when the genotype in the first column is the reference, because they would be the result of comparing
+    # reference vs. reference.
+    meansddf <- split(meansddf,meansddf$Genotype)
+    meansddf[[1]]$ANOVA_pValue <- as.numeric(1)
+    meansddf[[1]]$Sign <- "."
+    for (m in 2:length(meansddf)){
+      meansddf[[m]]$ANOVA_pValue <-  formatC(sapply(pval, function(x) x$pvalue[m-1]), format="e", digits=3)
+      meansddf[[m]]$Sign <- sapply(pval, function(x) x$significance[m-1])
+    }
     
-    meansddf$pval <- as.numeric(rep(pval, genotype_no))
-    meansddf$sign <- as.character(rep(sign, genotype_no))
-    colnames(meansddf) <- c("Genotype", "TimePoint", "N", parameter[i], "sd", "se", "ci", "Phase", "ANOVA_pValue", "Sign")
-    meansddf <- meansddf %>% mutate_at(c(parameter[[i]], "sd", "se", "ci"), round, digits=3)
-    meansddf <- meansddf[order(meansddf$TimePoint),]
-    meansddf$ANOVA_pValue <- formatC(meansddf$ANOVA_pValue, format="e", digits=3)
-    write.table(as.matrix(meansddf), file=paste0(folder, parameter[i], "_statistics.txt"), quote=F, col.names=TRUE, row.names=F, sep="\t")
+    # Turning the modified list into a dataframe again.
+    meansddf.df=data.frame()
+    for(n in 1:length(meansddf)){
+      meansddf.df=rbind(meansddf.df,meansddf[[n]])
+    }
     
-    if(genotype_no>2 && n>0){
-      
-      for (x in 1:n){
-        write.table(paste0("\n### Tukey multiple pairwise comparisons on timepoint ", signtp[x], " ###"), file=paste0(folder, parameter[i], "_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
-        capture.output(tukey[x], file=paste0(folder, parameter[i], "_statistics.txt"), append=T)
-        
+    # Formatting data and writing results.
+    meansddf.df <- meansddf.df %>% mutate_at(c(parameter[[i]], "sd", "se", "ci"), round, digits=3)
+    meansddf.df <- meansddf.df[order(meansddf.df$TimePoint),]
+    write.table(as.matrix(meansddf.df), file=paste0(folder, parameter[i], "_statistics.txt"), quote=F, col.names=TRUE, 
+                row.names=F, sep="\t")
+    
+    # Adding the results of Tukey's HSD post-hoc tests when applicable.
+    if(length(signtp)>0 && genotype_no>2){
+      for (x in 1:length(signtp)){
+        write.table(paste0("\n### Tukey multiple pairwise comparisons on timepoint ", signtp[x], " ###"), 
+                    file=paste0(folder, parameter[i], "_statistics.txt"), append=T, quote=F, row.names=F, col.names=F)
+        capture.output(tukey[[x]], file=paste0(folder, parameter[i], "_statistics.txt"), append=T)
       }
     }
     
-    sign <- meansddf[as.numeric(meansddf$ANOVA_pValue)<=0.05,]
-    sign <- sign[order(sign$TimePoint),]
-    
+    # Storing only the statistical significant results in a summary file.
+    sign <- meansddf.df[as.numeric(meansddf.df$ANOVA_pValue)<=0.05,]
     if(nrow(sign)>0){
-      write.table(paste0("\n\n### ", parameter[i], " ###\n"), "./Results/Significant_5e-2_meanovertimepoints.txt", quote=FALSE, append=T, row.names=F, col.names=F)
-      write.table(sign, "./Results/Significant_5e-2_meanovertimepoints.txt", quote=FALSE, append=T, row.names=F, col.names=T, sep="\t")
+      write.table(paste0("\n\n### ", parameter[i], " ###\n"), "./Results/Significant_5e-2_meanovertimepoints.txt", 
+                  quote=FALSE, append=T, row.names=F, col.names=F)
+      write.table(sign, "./Results/Significant_5e-2_meanovertimepoints.txt", quote=FALSE, append=T, row.names=F, 
+                  col.names=T, sep="\t")
     }
-    
   }
   return(plots)
 }
@@ -549,7 +555,8 @@ option_list <- list(make_option(c("-f", "--file"), type="character", default=NUL
                  make_option(c("-w", "--weight"), type="character", default=NULL, help="Weight data file", metavar="character"), 
                  make_option(c("-s", "--start"), type="integer", default=NULL, help="Start day for analysis", metavar="integer"), 
                  make_option(c("-e", "--end"), type="integer", default=NULL, help="End day for analysis", metavar="integer"), 
-                 make_option(c("-l", "--wheel"), type="character", action="store_true", default=NULL, help="Analyse wheel data", metavar="character"), 
+                 make_option(c("-l", "--wheel"), type="character", action="store_true", default=NULL, help="Analyse wheel data", 
+                             metavar="character"), 
                  make_option(c("-d", "--dfw"), type="character", action="store_true", default=NULL, 
                              help="Analyse drink/feed/weight data", metavar="character"), 
                  make_option(c("-a", "--activity"), type="character", action="store_true", default=NULL, 
@@ -563,6 +570,8 @@ option_list <- list(make_option(c("-f", "--file"), type="character", default=NUL
                  make_option(c("-i", "--height"), type="integer", default=7, help="Height of plots in pdf format", 
                              metavar="integer"), 
                  make_option(c("-v", "--levels"), type="character", default=NULL, help="Genotype order for results separated by comma", 
+                             metavar="character"), 
+                 make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis separated by comma", 
                              metavar="character"), 
                  make_option(c("-n", "--numbers"), type="character", action="store_true", default=NULL, 
                              help="Convert timepoints to numbers or use date_time instead", metavar="character"))
@@ -591,6 +600,15 @@ colnames(tempdata) <- c("Date", "Time", "Animal", "Box", "TempC", "HumC", "Light
 weight_data <- read.table(opt$weight, header=T, colClasses=c("integer", "factor", "numeric"))
 
 ## DATA FORMATTING  
+# Removing undesired animals
+if(!is.null(opt$omit)){
+  omit_animals <- as.numeric(unlist(strsplit(opt$omit,",")))
+  tempdata <- tempdata[!tempdata$Animal %in% omit_animals,]
+  omit_box <- unique(tempdata$Box[tempdata$Animal==omit_animals])
+  weight_data <- weight_data[!weight_data$Box %in% omit_box,]
+}
+
+
 # Assigning cycle phases
 tempdata$Phase[tempdata$LightC>0] <- "LIGHT"
 tempdata$Phase[tempdata$LightC==0] <- "DARK"
@@ -605,6 +623,10 @@ tempdata$Genotype <- unlist(lapply(tempdata$Box, function(x) as.character(weight
 genotype_no <- length(unique(tempdata$Genotype))
 tempdata$WgStart <- unlist(lapply(tempdata$Box, function(x) weight_data$WgStart[match(x, weight_data$Box)]))
 
+# Replacing non existent data for AvgSpeed by 0.00
+suppressWarnings(tempdata$AvgSpeed <- as.numeric(as.character(tempdata$AvgSpeed)))
+tempdata$AvgSpeed[is.na(tempdata$AvgSpeed)] <- 0
+
 # Selecting days from input interval, assigning timepoints and taring cumulative parameters if the -s (--start) and -e (--end)
 # arguments were indicated
 if(!is.null(opt$start) || !is.null(opt$end)){
@@ -612,6 +634,7 @@ if(!is.null(opt$start) || !is.null(opt$end)){
   data <- tempdata[tempdata$Day>=opt$start & tempdata$Day<=opt$end,]
   Box <- unique(data$Box)
   data$TimePoint <- rep(1:nrow(unique(data[c("Date", "Time")])), length(Box))
+  data[,3:54]=sapply(data[,3:54],function(x) as.numeric(x))
   
   # Getting the baselines for cumulative parameters to subtract them from the rest of the values of the interval 
   drinktare <- c()
@@ -671,10 +694,6 @@ for(i in 1:length(cum)){
   name <- paste("Cum", cum[i], sep="")
   data[[name]] <- ave(data[[cum[i]]], data$Box, FUN=cumsum)
 }
-
-# Replacing non existent data for AvgSpeed by 0.00
-suppressWarnings(data$AvgSpeed <- as.numeric(as.character(data$AvgSpeed)))
-data$AvgSpeed[is.na(data$AvgSpeed)] <- 0
 
 ## FOLDERS AND STATISTICS FILES
 # Creating the directory to store the results and writing the formatted dataset
