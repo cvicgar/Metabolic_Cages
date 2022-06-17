@@ -573,8 +573,6 @@ option_list <- list(make_option(c("-f", "--file"), type="character", default=NUL
                              metavar="character"), 
                  make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis, separated by comma", 
                              metavar="character"), 
-                 make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis separated by comma", 
-                             metavar="character"), 
                  make_option(c("-n", "--numbers"), type="character", action="store_true", default=NULL, 
                              help="Convert timepoints to numbers or use date_time instead", metavar="character"))
 opt_parser <- OptionParser(option_list=option_list)
@@ -605,8 +603,8 @@ weight_data <- read.table(opt$weight, header=T, colClasses=c("integer", "factor"
 # Removing undesired animals
 if(!is.null(opt$omit)){
   omit_animals <- as.numeric(unlist(strsplit(opt$omit,",")))
-  tempdata <- tempdata[!tempdata$Animal %in% omit_animals,]
   omit_box <- unique(tempdata$Box[tempdata$Animal==omit_animals])
+  tempdata <- tempdata[!tempdata$Animal %in% omit_animals,]
   weight_data <- weight_data[!weight_data$Box %in% omit_box,]
 }
 
