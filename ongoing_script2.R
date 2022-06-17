@@ -569,9 +569,9 @@ option_list <- list(make_option(c("-f", "--file"), type="character", default=NUL
                              metavar="integer"), 
                  make_option(c("-i", "--height"), type="integer", default=7, help="Height of plots in pdf format", 
                              metavar="integer"), 
-                 make_option(c("-v", "--levels"), type="character", default=NULL, help="Genotype order for results separated by comma", 
+                 make_option(c("-v", "--levels"), type="character", default=NULL, help="Genotype order for results, separated by comma", 
                              metavar="character"), 
-                 make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis separated by comma", 
+                 make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis, separated by comma", 
                              metavar="character"), 
                  make_option(c("-n", "--numbers"), type="character", action="store_true", default=NULL, 
                              help="Convert timepoints to numbers or use date_time instead", metavar="character"))
