@@ -573,6 +573,8 @@ option_list <- list(make_option(c("-f", "--file"), type="character", default=NUL
                              metavar="character"), 
                  make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis, separated by comma", 
                              metavar="character"), 
+                 make_option(c("-o", "--omit"), type="character", default=NULL, help="Animals to remove from the analysis separated by comma", 
+                             metavar="character"), 
                  make_option(c("-n", "--numbers"), type="character", action="store_true", default=NULL, 
                              help="Convert timepoints to numbers or use date_time instead", metavar="character"))
 opt_parser <- OptionParser(option_list=option_list)
